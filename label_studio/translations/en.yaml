@@ -1,0 +1,24 @@
+configuration:
+  backend:
+    name: Printer connection
+    description: "direct: send labels straight to the USB device below. cups: print through the CUPS printer below."
+  device:
+    name: USB device
+    description: The LabelWriter's device path, usually /dev/usb/lp0.
+  cups_printer:
+    name: CUPS printer name
+    description: Only used with the cups connection or the CUPS fallback.
+  fallback_cups:
+    name: Fall back to CUPS
+    description: Try CUPS when printing over direct USB fails.
+  mqtt_host:
+    name: MQTT broker
+    description: Host name or IP address of your MQTT broker, e.g. 192.168.1.63. Leave empty to use the Mosquitto add-on automatically. Needed for the Home Assistant print buttons.
+  mqtt_port:
+    name: MQTT port
+    description: Usually 1883.
+  mqtt_username:
+    name: MQTT username
+    description: Leave empty if the broker allows anonymous connections.
+  mqtt_password:
+    name: MQTT password

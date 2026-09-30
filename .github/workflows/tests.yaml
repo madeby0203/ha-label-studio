@@ -1,0 +1,43 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r label_studio/requirements.txt pytest
+
+      # The app image downloads the Material Design Icons font; the icon tests need it too.
+      - name: Download Material Design Icons
+        run: |
+          version=$(sed -n 's/^ARG MDI_VERSION=//p' label_studio/Dockerfile)
+          mkdir -p "${RUNNER_TEMP}/mdi"
+          for file in css/materialdesignicons.css fonts/materialdesignicons-webfont.ttf; do
+            curl -fsSL -o "${RUNNER_TEMP}/mdi/$(basename "$file")" "https://cdn.jsdelivr.net/npm/@mdi/font@${version}/${file}"
+          done
+
+      - name: Run tests
+        env:
+          DYMO_LOCK_FILE: ${{ runner.temp }}/dymo-labels.lock
+          FONT_DIRS: ${{ runner.temp }}/mdi
+        run: pytest -q tests

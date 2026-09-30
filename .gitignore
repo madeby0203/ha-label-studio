@@ -1,7 +1,10 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.DS_Store
 .venv/
 env/
 *.egg-info/
+
+# macOS
+.DS_Store
+._*

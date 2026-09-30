@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Label Studio</title>
+<script>
+// Adopt Home Assistant's theme. Inside ingress the page is an iframe on Home Assistant's own
+// origin, so the theme variables Home Assistant sets on its <html> element can be read and
+// copied here. Runs before the body renders to avoid a flash of the fallback colours.
+const THEME_VARS = [
+  'primary-color', 'accent-color', 'rgb-primary-color', 'text-primary-color', 'primary-text-color',
+  'secondary-text-color', 'disabled-text-color', 'divider-color', 'outline-color', 'error-color', 'success-color',
+  'warning-color', 'primary-background-color', 'secondary-background-color', 'card-background-color',
+  'ha-card-background', 'ha-card-border-radius', 'ha-card-border-width', 'ha-card-border-color',
+  'ha-card-box-shadow', 'ha-card-backdrop-filter', 'ha-card-header-color', 'ha-card-header-font-size',
+  'ha-card-header-font-family', 'lovelace-background', 'view-background', 'app-header-background-color',
+  'app-header-text-color', 'app-header-border-bottom', 'input-fill-color', 'input-ink-color',
+  'input-label-ink-color', 'input-idle-line-color', 'input-hover-line-color', 'input-disabled-fill-color',
+  'mdc-text-field-fill-color', 'mdc-text-field-ink-color', 'mdc-text-field-label-ink-color',
+  'mdc-text-field-idle-line-color', 'mdc-theme-primary', 'mdc-theme-surface', 'mdc-dialog-scrim-color',
+  'ha-dialog-border-radius', 'ha-dialog-surface-background', 'ha-font-family-body', 'mdc-typography-font-family',
+  'paper-font-body1_-_font-family', 'state-icon-color',
+];
+
+function readHomeAssistantTheme() {
+  const root = document.documentElement;
+  let source = null;
+  try {
+    if (window.parent !== window) source = getComputedStyle(window.parent.document.documentElement);
+  } catch (e) { /* not framed by Home Assistant (another origin) */ }
+  root.classList.toggle('themed', !!source);
+  root.classList.toggle('framed', window.parent !== window);
+  if (!source) return false;
+  for (const name of THEME_VARS) {
+    const value = source.getPropertyValue('--' + name).trim();
+    if (value) root.style.setProperty('--' + name, value); else root.style.removeProperty('--' + name);
+  }
+  // Fallbacks for anything a theme leaves out must match its light or dark base.
+  const probe = document.createElement('span');
+  probe.style.color = source.getPropertyValue('--primary-background-color').trim() || '#fafafa';
+  root.append(probe);
+  const [r, g, b] = (getComputedStyle(probe).color.match(/\d+(\.\d+)?/g) || [250, 250, 250]).map(Number);
+  probe.remove();
+  const dark = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.5;
+  root.classList.toggle('dark', dark);
+  root.style.colorScheme = dark ? 'dark' : 'light';
+  return true;
+}
+
+if (readHomeAssistantTheme()) {
+  // Follow theme and dark-mode changes made while the page is open.
+  try {
+    new MutationObserver(readHomeAssistantTheme).observe(window.parent.document.documentElement, {attributes: true, attributeFilter: ['style', 'class']});
+    window.parent.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readHomeAssistantTheme);
+  } catch (e) { /* theme stays as it was when the page opened */ }
+}
+</script>
+<style>
+@font-face{font-family:Roboto;font-weight:400;font-display:swap;src:url("webfont/roboto-400") format("truetype")}
+@font-face{font-family:Roboto;font-weight:500;font-display:swap;src:url("webfont/roboto-500") format("truetype")}
+@font-face{font-family:Roboto;font-weight:700;font-display:swap;src:url("webfont/roboto-700") format("truetype")}
+
+/* Home Assistant's default theme, used for anything the active theme does not set. */
+:root{
+  --fb-primary:#03a9f4;--fb-background:#fafafa;--fb-secondary-background:#e5e5e5;--fb-card:#fff;--fb-text:#212121;
+  --fb-secondary-text:#727272;--fb-disabled:#bdbdbd;--fb-divider:rgba(0,0,0,.12);--fb-fill:#f5f5f5;
+  --fb-line:rgba(0,0,0,.42);--fb-error:#db4437;--fb-header:#fafafa;--fb-header-text:#212121;
+}
+:root.dark{
+  --fb-background:#111111;--fb-secondary-background:#282828;--fb-card:#1c1c1c;--fb-text:#e1e1e1;
+  --fb-secondary-text:#9b9b9b;--fb-disabled:#6f6f6f;--fb-divider:rgba(225,225,225,.12);--fb-fill:#2a2a2a;
+  --fb-line:rgba(255,255,255,.42);--fb-header:#111111;--fb-header-text:#e1e1e1;
+}
+@media (prefers-color-scheme:dark){
+  :root:not(.themed){
+    --fb-background:#111111;--fb-secondary-background:#282828;--fb-card:#1c1c1c;--fb-text:#e1e1e1;
+    --fb-secondary-text:#9b9b9b;--fb-disabled:#6f6f6f;--fb-divider:rgba(225,225,225,.12);--fb-fill:#2a2a2a;
+    --fb-line:rgba(255,255,255,.42);--fb-header:#111111;--fb-header-text:#e1e1e1;color-scheme:dark;
+  }
+}
+:root{
+  --primary:var(--primary-color,var(--fb-primary));
+  --on-primary:var(--text-primary-color,#fff);
+  --text:var(--primary-text-color,var(--fb-text));
+  --text-2:var(--secondary-text-color,var(--fb-secondary-text));
+  --text-disabled:var(--disabled-text-color,var(--fb-disabled));
+  --divider:var(--divider-color,var(--fb-divider));
+  --background:var(--primary-background-color,var(--fb-background));
+  --background-2:var(--secondary-background-color,var(--fb-secondary-background));
+  --card:var(--ha-card-background,var(--card-background-color,var(--fb-card)));
+  --surface:var(--ha-dialog-surface-background,var(--mdc-theme-surface,var(--card)));
+  /* Themes may make surfaces translucent; dialogs layer the surface over an opaque base instead. */
+  --solid-surface:linear-gradient(var(--surface),var(--surface)),var(--fb-card);
+  --fill:var(--input-fill-color,var(--mdc-text-field-fill-color,var(--fb-fill)));
+  --line:var(--input-idle-line-color,var(--mdc-text-field-idle-line-color,var(--fb-line)));
+  --error:var(--error-color,var(--fb-error));
+  --radius:var(--ha-card-border-radius,12px);
+  --primary-soft:color-mix(in srgb,var(--primary) 14%,transparent);
+  --font:var(--ha-font-family-body,var(--mdc-typography-font-family,var(--paper-font-body1_-_font-family,Roboto,Noto,sans-serif)));
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{min-height:100%}
+body{
+  margin:0;color:var(--text);font:400 14px/1.43 var(--font);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  /* The theme's dashboard background when it has one, otherwise Home Assistant's page colour. */
+  background:var(--view-background,var(--lovelace-background,var(--background)));
+  background-attachment:fixed;
+}
+.mdi{font-family:mdi;font-style:normal;font-weight:normal;line-height:1;display:inline-block}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+
+/* Toolbar, like Home Assistant's app header */
+.toolbar{display:flex;align-items:center;height:56px;padding:0 4px 0 24px;position:sticky;top:0;z-index:3;
+  background:var(--app-header-background-color,var(--fb-header));color:var(--app-header-text-color,var(--fb-header-text));
+  border-bottom:var(--app-header-border-bottom,none)}
+.toolbar .title{flex:1;font-size:20px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.toolbar .brand{width:24px;height:24px;flex:none;margin-right:16px;fill:currentColor}
+/* On narrow screens Home Assistant puts its own header with the app name above the page. */
+@media (max-width:870px){:root.framed .toolbar{height:48px}:root.framed .toolbar .title,:root.framed .toolbar .brand{visibility:hidden}}
+.icon-button{width:48px;height:48px;border:0;border-radius:50%;background:none;color:inherit;cursor:pointer;display:grid;place-items:center;font-size:24px}
+.icon-button:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
+
+/* Page layout */
+.page{max-width:1200px;margin:0 auto;padding:16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.column{display:flex;flex-direction:column;gap:16px;min-width:0}
+.sticky{position:sticky;top:72px}
+@media (max-width:900px){.page{grid-template-columns:1fr;padding:8px}.sticky{position:static;order:-1}}
+
+/* Cards, like ha-card */
+.card{background:var(--card);color:var(--text);border-radius:var(--radius);
+  border:var(--ha-card-border-width,1px) solid var(--ha-card-border-color,var(--divider));
+  box-shadow:var(--ha-card-box-shadow,none);backdrop-filter:var(--ha-card-backdrop-filter,none);
+  -webkit-backdrop-filter:var(--ha-card-backdrop-filter,none)}
+.card-header{color:var(--ha-card-header-color,var(--text));font-family:var(--ha-card-header-font-family,inherit);
+  font-size:var(--ha-card-header-font-size,24px);letter-spacing:-.012em;line-height:48px;padding:12px 16px 4px}
+.card-content{padding:0 16px 16px}
+.card-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:8px;border-top:1px solid var(--divider)}
+.section{margin-top:16px;padding-top:16px;border-top:1px solid var(--divider)}
+.subheader{font-size:14px;font-weight:500;color:var(--text-2);margin:0 0 12px;display:flex;align-items:center;justify-content:space-between}
+
+/* Filled text fields, like ha-textfield / ha-select */
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-top:12px}
+.field{position:relative;display:block;background:var(--fill);border-radius:4px 4px 0 0;
+  border-bottom:1px solid var(--line);transition:border-color .15s}
+.field:hover{border-bottom-color:var(--input-hover-line-color,var(--text))}
+.field:focus-within{border-bottom:2px solid var(--primary)}
+.field>.label{position:absolute;left:16px;top:7px;font-size:12px;line-height:16px;
+  color:var(--input-label-ink-color,var(--text-2));pointer-events:none;white-space:nowrap}
+.field:focus-within>.label{color:var(--primary)}
+.field input,.field select,.field textarea{display:block;width:100%;border:0;outline:0;background:transparent;
+  color:var(--input-ink-color,var(--text));font:inherit;font-size:16px;padding:26px 16px 8px;min-height:56px;appearance:none;-webkit-appearance:none}
+.field textarea{resize:vertical;min-height:112px;line-height:1.4}
+.field select{padding-right:40px;cursor:pointer;text-overflow:ellipsis}
+.field select option{background:var(--fb-card);color:var(--text)}
+.field.select::after{content:"\F0140";font-family:mdi;position:absolute;right:12px;top:18px;font-size:22px;color:var(--text-2);pointer-events:none}
+.field.select:focus-within::after{color:var(--primary)}
+.field input::placeholder,.field textarea::placeholder{color:var(--text-disabled)}
+:root.dark .field input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1)}
+
+/* Sliders, like ha-slider */
+.slider{display:block}
+.slider .top{display:flex;justify-content:space-between;color:var(--text-2)}
+.slider output{color:var(--text);font-variant-numeric:tabular-nums}
+.slider input{width:100%;margin:4px 0 0;accent-color:var(--primary);height:28px;cursor:pointer}
+
+/* Buttons, like ha-button */
+.button{font:inherit;font-weight:500;letter-spacing:.01em;border:0;border-radius:18px;height:36px;
+  padding:0 16px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;background:none;color:var(--primary)}
+.button:hover{background:var(--primary-soft)}
+.button.filled{background:var(--primary);color:var(--on-primary)}
+.button.filled:hover{filter:brightness(1.08)}
+.button:disabled{opacity:.6;cursor:default}
+.button .mdi{font-size:18px}
+.link{font:inherit;font-size:13px;border:0;background:none;padding:0;color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.link:hover{text-decoration:underline}
+
+/* Expansion panels, like ha-expansion-panel */
+details.expand{border:1px solid var(--divider);border-radius:var(--radius);margin-top:16px}
+details.expand>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;min-height:48px;padding:0 12px 0 16px;cursor:pointer;font-weight:500;user-select:none}
+details.expand>summary::-webkit-details-marker{display:none}
+details.expand>summary::after{content:"\F0140";font-family:mdi;font-size:24px;color:var(--text-2);transition:transform .15s}
+details.expand[open]>summary::after{transform:rotate(180deg)}
+details.expand>.panel{padding:0 16px 16px}
+details.hint-panel{margin-top:8px}
+details.hint-panel>summary{list-style:none;display:inline-flex}
+details.hint-panel>summary::-webkit-details-marker{display:none}
+details.hint-panel>.panel{margin-top:8px;padding:12px 16px;border-radius:8px;background:var(--background-2);color:var(--text-2);font-size:13px}
+.panel p{margin:0 0 8px}
+.examples{display:flex;flex-direction:column;gap:6px}
+.example{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;text-align:left;font:inherit;font-size:13px;color:var(--text-2);background:none;border:0;padding:0;cursor:pointer}
+.example code{color:var(--text);background:var(--card);border:1px solid var(--divider);border-radius:6px;padding:2px 6px}
+.example:hover code{border-color:var(--primary)}
+
+/* Icon picker */
+.icon-search{display:flex;align-items:center;gap:12px}
+.icon-current{width:56px;height:56px;flex:none;border-radius:12px;border:1px dashed var(--divider);display:grid;place-items:center;font-size:32px;color:var(--state-icon-color,var(--text))}
+.icon-current.set{border:2px solid var(--primary);background:var(--primary-soft)}
+.icon-search .field{flex:1}
+.icon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:4px;margin-top:12px;max-height:196px;overflow-y:auto;padding:2px}
+.icon-tile{height:44px;border:1px solid transparent;border-radius:10px;background:none;color:var(--state-icon-color,var(--text));cursor:pointer;font-size:24px;display:grid;place-items:center;padding:0}
+.icon-tile:hover{background:var(--background-2)}
+.segmented{display:inline-flex;border:1px solid var(--divider);border-radius:18px;overflow:hidden}
+.segmented button{font:inherit;font-weight:500;border:0;border-right:1px solid var(--divider);background:none;color:var(--text);height:36px;padding:0 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.segmented button:last-child{border-right:0}
+.segmented button:hover{background:var(--background-2)}
+.segmented button.active{background:var(--primary-soft);color:var(--primary)}
+.segmented .mdi{font-size:18px}
+.icon-tile.selected{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
+
+/* Preview */
+.stage{background:var(--background-2);border-radius:8px;padding:24px 16px;display:grid;place-items:center;min-height:200px}
+.stage img{display:block;max-width:100%;max-height:320px;background:#fff;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.25);image-rendering:pixelated}
+.preview-error{color:var(--error);font-size:13px;text-align:center;margin:8px 0 0;min-height:18px}
+.hint{color:var(--text-2);font-size:13px;margin:8px 0 0}
+
+/* Templates */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;height:32px;border-radius:16px;border:1px solid var(--divider);background:var(--card);overflow:hidden}
+.chip button{font:inherit;border:0;background:none;color:var(--text);height:100%;padding:0 12px;cursor:pointer}
+.chip button:hover{background:var(--primary-soft)}
+.chip .remove{padding:0 8px 0 2px;color:var(--text-2);font-family:mdi;font-size:16px}
+.empty{color:var(--text-2);font-size:13px}
+
+/* Dialogs, like ha-dialog */
+dialog{border:0;border-radius:var(--ha-dialog-border-radius,24px);padding:0;width:min(520px,calc(100% - 32px));max-height:calc(100% - 32px);
+  background:var(--solid-surface);color:var(--text);box-shadow:0 11px 15px -7px rgba(0,0,0,.2),0 24px 38px 3px rgba(0,0,0,.14)}
+dialog::backdrop{background:var(--mdc-dialog-scrim-color,rgba(0,0,0,.32))}
+dialog form{padding:24px 24px 8px}
+dialog h2{margin:0 0 16px;font-size:24px;font-weight:400;line-height:32px}
+dialog .subheader{margin-top:24px}
+.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin:24px -16px 0;padding:8px 0;position:sticky;bottom:0;background:var(--solid-surface)}
+.check{display:flex;gap:12px;align-items:center;margin-top:16px;cursor:pointer}
+.check input,.label-row input{width:18px;height:18px;margin:0;accent-color:var(--primary);flex:none}
+.label-list{margin-top:8px;max-height:260px;overflow-y:auto;border:1px solid var(--divider);border-radius:8px}
+.label-row{display:flex;gap:12px;align-items:center;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--divider)}
+.label-row:last-child{border-bottom:0}
+.label-row:hover{background:var(--primary-soft)}
+.label-row .size{margin-left:auto;color:var(--text-2);font-size:13px;white-space:nowrap}
+.label-item{border-bottom:1px solid var(--divider)}
+.label-item:last-child{border-bottom:0}
+.label-item .label-row{border-bottom:0}
+.offsets{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:0 12px 12px 42px;color:var(--text-2);font-size:13px}
+.offsets label{display:inline-flex;align-items:center;gap:6px}
+.offsets input{width:72px;font:inherit;font-size:14px;color:var(--text);background:var(--fill);border:0;border-bottom:1px solid var(--line);border-radius:4px 4px 0 0;padding:6px 8px;text-align:right}
+.offsets input:focus{outline:0;border-bottom:2px solid var(--primary)}
+.check.disabled{opacity:.5;cursor:default}
+
+/* Toast, like ha-toast */
+.toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,calc(100% + 32px));background:#323232;color:#fff;
+  padding:14px 16px;border-radius:4px;box-shadow:0 3px 5px -1px rgba(0,0,0,.2),0 6px 10px rgba(0,0,0,.14);
+  transition:transform .2s;max-width:calc(100% - 32px);z-index:10}
+.toast.show{transform:translate(-50%,0)}
+.toast.error{background:var(--error)}
+</style>
+</head>
+<body>
+<header class="toolbar">
+  <!-- The Label Studio mark, drawn on the MDI grid (brand: mdi-peel-label.svg). -->
+  <svg class="brand" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5H20A2 2 0 0 1 22 7V13H16V19H4A2 2 0 0 1 2 17V7A2 2 0 0 1 4 5ZM4.5 16.5H11.5V11.6L8 8.6L4.5 11.6ZM13 8V9.8H19.5V8ZM16.9 13.9H22L16.9 19Z"/></svg>
+  <div class="title">Label Studio</div>
+  <button class="icon-button" type="button" title="Printer settings" aria-label="Printer settings" onclick="openSettings()"><span class="mdi">&#xF0493;</span></button>
+</header>
+
+<main class="page">
+  <div class="column">
+    <section class="card">
+      <div class="card-header">Label</div>
+      <div class="card-content">
+        <label class="field"><span class="label">Text</span><textarea id="text" placeholder="One line per row; long lines wrap automatically"></textarea></label>
+        <details class="hint-panel">
+          <summary class="link"><span class="mdi">&#xF0169;</span>Use Home Assistant templates</summary>
+          <div class="panel">
+            <p>Text between <code>{% raw %}{{ }}{% endraw %}</code> is filled in by Home Assistant at the moment of printing, also when printing from a button or an automation. Click an example to add it.</p>
+            <div class="examples">{% raw %}
+              <button class="example" type="button" data-insert="{{ now().strftime('%d-%m-%Y') }}"><code>{{ now().strftime('%d-%m-%Y') }}</code>today's date</button>
+              <button class="example" type="button" data-insert="{{ now().strftime('%H:%M') }}"><code>{{ now().strftime('%H:%M') }}</code>the current time</button>
+              <button class="example" type="button" data-insert="{{ (now() + timedelta(days=3)).strftime('%d-%m') }}"><code>{{ (now() + timedelta(days=3)).strftime('%d-%m') }}</code>a date 3 days from now</button>
+              <button class="example" type="button" data-insert="{{ states('sensor.outdoor_temperature') }}"><code>{{ states('sensor.outdoor_temperature') }}</code>the state of an entity</button>
+            {% endraw %}</div>
+          </div>
+        </details>
+        <div class="row" style="margin-top:16px">
+          <label class="field select"><span class="label">Font</span><select id="font">{% for id, name in fonts.items() %}<option value="{{ id }}">{{ name }}</option>{% endfor %}</select></label>
+          <label class="field select"><span class="label">Weight</span><select id="weight"><option value="bold">Bold</option><option value="regular">Regular</option></select></label>
+          <label class="field select"><span class="label">Align</span><select id="align"><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></label>
+        </div>
+        <div class="row">
+          <label class="slider"><span class="top">Text size <output id="text_size_out"></output></span><input id="text_size" type="range" min="0" max="72" step="1" value="0"></label>
+          <label class="field select"><span class="label">Hyphenation</span><select id="language">{% for code, name in languages.items() %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
+        </div>
+
+        <div class="section">
+          <div class="subheader">Image</div>
+          <div class="segmented" role="group" aria-label="Image">
+            <button type="button" data-graphic="">None</button>
+            <button type="button" data-graphic="icon"><span class="mdi">&#xF02E9;</span>Icon</button>
+            <button type="button" data-graphic="qr"><span class="mdi">&#xF0432;</span>QR code</button>
+          </div>
+          <input type="hidden" id="graphic">
+          <div id="icon-picker" style="margin-top:16px">
+          <div class="icon-search">
+            <span class="icon-current" id="icon-current" title="No icon"></span>
+            <label class="field"><span class="label">Search icons</span><input id="icon-search" autocomplete="off" placeholder="e.g. fridge, mdi:name or an emoji"></label>
+          </div>
+          <div class="icon-grid" id="icon-grid"></div>
+          </div>
+          <input type="hidden" id="icon">
+          <label class="field" id="qr-field" style="margin-top:16px"><span class="label">QR code content</span><input id="qr" placeholder="URL or text; Home Assistant templates work here too"></label>
+          <div class="row" id="image-options">
+            <label class="field select"><span class="label">Position</span><select id="image_position"><option value="left">Left of the text</option><option value="right">Right of the text</option><option value="top">Above the text</option><option value="bottom">Below the text</option></select></label>
+            <label class="slider"><span class="top">Size <output id="icon_size_out"></output></span><input id="icon_size" type="range" min="20" max="100" step="5" value="100"></label>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="subheader">Date</div>
+          <div class="row" style="margin-top:0">
+            <label class="field select"><span class="label">Date</span><select id="date_mode" onchange="toggleDate()"><option value="">None</option><option value="today">Today, when printed</option><option value="fixed">Pick a date</option></select></label>
+            <label class="field" id="date_fixed_label" hidden><span class="label">On</span><input id="date_fixed" type="date"></label>
+            <label class="field select"><span class="label">Format</span><select id="date_format">{% for pattern, example in date_formats.items() %}<option value="{{ pattern }}">{{ example }}</option>{% endfor %}</select></label>
+          </div>
+        </div>
+
+        <details class="expand">
+          <summary>Advanced</summary>
+          <div class="panel">
+            <div class="row" style="margin-top:0">
+              <label class="slider"><span class="top">Icon margin <output id="icon_margin_out"></output></span><input id="icon_margin" type="range" min="0" max="8" step="0.5" value="{{ margin }}"></label>
+              <label class="slider"><span class="top">Text margin <output id="text_margin_out"></output></span><input id="text_margin" type="range" min="0" max="8" step="0.5" value="{{ margin }}"></label>
+              <label class="slider"><span class="top">Space between <output id="gap_out"></output></span><input id="gap" type="range" min="0" max="8" step="0.5" value="{{ gap }}"></label>
+            </div>
+            <p class="hint">Icon margin is the space around the icon or QR code, text margin the space around the text; both are measured from the label's edges. Space between separates the image from the text.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+  </div>
+
+  <div class="column sticky">
+    <section class="card">
+      <div class="card-header">Preview</div>
+      <div class="card-content">
+        <div class="stage"><img id="preview" alt="Label preview"></div>
+        <p class="preview-error" id="preview-error"></p>
+        <div class="row" style="grid-template-columns:1fr 96px">
+          <label class="field select"><span class="label">Label size</span><select id="label_size"></select></label>
+          <label class="field"><span class="label">Copies</span><input id="copies" type="number" min="1" max="99" value="1"></label>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="button" type="button" onclick="saveTemplate()"><span class="mdi">&#xF0193;</span>Save as template</button>
+        <button class="button filled" id="print-btn" type="button" onclick="printLabel()"><span class="mdi">&#xF042A;</span><span>Print</span></button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">Templates</div>
+      <div class="card-content">
+        <div class="chips" id="templates"></div>
+        <p class="hint" id="ha-hint"></p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<dialog id="settings">
+  <form method="dialog" onsubmit="saveSettings(event)">
+    <h2>Printer settings</h2>
+    <label class="field select"><span class="label">Connection</span><select id="backend" onchange="toggleBackend()"><option value="direct">Direct USB</option><option value="cups">CUPS</option></select></label>
+    <label class="field" data-backend="direct" style="margin-top:12px"><span class="label">USB device</span><input id="device" placeholder="/dev/usb/lp0"></label>
+    <label class="field" data-backend="cups" style="margin-top:12px"><span class="label">CUPS printer name</span><input id="cups_printer" placeholder="DYMO"></label>
+    <label class="check" data-backend="direct"><input id="fallback_cups" type="checkbox"> Fall back to CUPS if USB fails</label>
+
+    <div class="subheader">Label sizes</div>
+    <p class="hint" style="margin-top:0">Tick the labels you use; favourites appear on the label screen and are the sizes computers can choose when printing over the network. If a label type prints off-centre, correct it here: horizontal <b>+</b> moves the print right, vertical <b>−</b> moves it up (in mm).</p>
+    <label class="field" style="margin-top:12px"><span class="label">Search labels</span><input id="label-search" autocomplete="off" placeholder="e.g. 11354, address or 57"></label>
+    <div class="label-list" id="label-list"></div>
+    <label class="field select" style="margin-top:12px"><span class="label">Default label</span><select id="default_label"></select></label>
+
+    <div class="subheader">Network printer</div>
+    <label class="check" id="print_server_label" style="margin-top:0"><input id="print_server" type="checkbox"> Share this printer on the network</label>
+    <p class="hint" id="print-server-info"></p>
+    <div class="dialog-actions">
+      <button class="button" type="button" onclick="settingsDialog.close()">Cancel</button>
+      <button class="button" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="template-dialog">
+  <form method="dialog" onsubmit="confirmSaveTemplate(event)">
+    <h2>Save as template</h2>
+    <label class="field"><span class="label">Name</span><input id="template-name" required autocomplete="off"></label>
+    <p class="hint">Saving under an existing name replaces that template. Every template also becomes a print button in Home Assistant.</p>
+    <div class="dialog-actions">
+      <button class="button" type="button" onclick="$('template-dialog').close()">Cancel</button>
+      <button class="button" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm-dialog">
+  <form method="dialog">
+    <h2 id="confirm-title"></h2>
+    <p class="hint" id="confirm-text"></p>
+    <div class="dialog-actions">
+      <button class="button" value="cancel">Cancel</button>
+      <button class="button" value="ok" id="confirm-ok"></button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const apiBase = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
+const LABEL_SIZES = {{ sizes|tojson }};
+const LABEL_NAMES = Object.fromEntries(LABEL_SIZES.map(size => [size.id, size.name]));
+const fields = ['text', 'font', 'weight', 'align', 'text_size', 'language', 'graphic', 'icon', 'qr', 'image_position',
+  'icon_size', 'date_format', 'icon_margin', 'text_margin', 'gap', 'label_size', 'copies'];
+// Used for templates saved before these settings existed.
+const FIELD_DEFAULTS = {text_size: '0', icon_size: '100', language: '{{ default_language }}', image_position: 'left',
+  icon_margin: '{{ margin }}', text_margin: '{{ margin }}', gap: '{{ gap }}'};
+const settingFields = ['backend', 'device', 'cups_printer'];
+const EMOJI = ['🥛', '🧀', '🍎', '🥕', '🍝', '🥫', '🧂', '☕', '🍷', '❄️', '🔋', '💊', '🧦', '🎄', '📦', '⚠️'];
+const $ = id => document.getElementById(id);
+const settingsDialog = $('settings');
+let settings = {favorite_labels: [], default_label: ''};
+
+function dateValue() {
+  const mode = $('date_mode').value;
+  return mode === 'fixed' ? $('date_fixed').value : mode;
+}
+function value() {
+  const label = {...Object.fromEntries(fields.map(id => [id, $(id).value])), date: dateValue()};
+  // Only the chosen image is part of the label.
+  if (label.graphic !== 'icon') label.icon = '';
+  if (label.graphic !== 'qr') label.qr = '';
+  return label;
+}
+const post = (path, body) => fetch(apiBase + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+
+let toastTimer;
+function toast(message, error = false) {
+  const el = $('toast');
+  el.textContent = message;
+  el.className = 'toast show' + (error ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = 'toast', 3500);
+}
+
+function confirmDialog(title, text, action) {
+  $('confirm-title').textContent = title;
+  $('confirm-text').textContent = text;
+  $('confirm-ok').textContent = action;
+  const dialog = $('confirm-dialog');
+  dialog.returnValue = '';
+  dialog.showModal();
+  return new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok'), {once: true}));
+}
+
+// Preview
+
+let previewTimer, previewUrl, previewSeq = 0;
+async function refresh() {
+  const seq = ++previewSeq;
+  const r = await post('api/preview', value());
+  if (seq !== previewSeq) return;
+  if (!r.ok) {
+    const result = await r.json().catch(() => ({}));
+    $('preview-error').textContent = result.message || 'Preview failed';
+    return;
+  }
+  $('preview-error').textContent = '';
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = URL.createObjectURL(await r.blob());
+  $('preview').src = previewUrl;
+}
+function queueRefresh() { clearTimeout(previewTimer); previewTimer = setTimeout(refresh, 250); }
+[...fields, 'date_mode', 'date_fixed'].forEach(id => $(id).addEventListener('input', queueRefresh));
+
+// Home Assistant template examples insert themselves at the cursor.
+document.querySelectorAll('.example').forEach(button => button.addEventListener('click', () => {
+  const text = $('text');
+  text.setRangeText(button.dataset.insert, text.selectionStart, text.selectionEnd, 'end');
+  text.focus();
+  queueRefresh();
+}));
+
+// Label sizes: the main screen offers the favourites (plus a template's size when it is not one).
+
+function fillLabelSelect(select, ids, selected) {
+  select.replaceChildren(...ids.map(id => new Option(LABEL_NAMES[id] || id, id)));
+  if (selected) select.value = selected;
+}
+
+function setLabelSize(id) {
+  const ids = [...settings.favorite_labels];
+  if (id && LABEL_NAMES[id] && !ids.includes(id)) ids.push(id);
+  fillLabelSelect($('label_size'), ids, id && LABEL_NAMES[id] ? id : settings.default_label);
+}
+
+async function loadSettings() {
+  const r = await fetch(apiBase + 'api/settings');
+  if (r.ok) settings = await r.json();
+  setLabelSize(settings.default_label);
+}
+
+// Image: none, an icon or a QR code
+
+function setGraphic(graphic) {
+  $('graphic').value = graphic;
+  document.querySelectorAll('[data-graphic]').forEach(button => button.classList.toggle('active', button.dataset.graphic === graphic));
+  $('icon-picker').hidden = graphic !== 'icon';
+  $('qr-field').hidden = graphic !== 'qr';
+  $('image-options').hidden = !graphic;
+  queueRefresh();
+}
+document.querySelectorAll('[data-graphic]').forEach(button => button.addEventListener('click', () => {
+  setGraphic(button.dataset.graphic);
+  if (button.dataset.graphic === 'qr') $('qr').focus();
+  if (button.dataset.graphic === 'icon') $('icon-search').focus();
+}));
+
+// Icons
+
+let mdi = {}, homeIcons = [];
+function glyph(icon) {
+  if (icon.startsWith('mdi:')) {
+    const code = mdi[icon.slice(4)];
+    return code ? {text: String.fromCodePoint(code), mdi: true} : {text: '?', mdi: false};
+  }
+  return {text: icon, mdi: false};
+}
+
+function iconTile(icon) {
+  const g = glyph(icon);
+  const tile = document.createElement('button');
+  tile.type = 'button';
+  tile.className = 'icon-tile' + (g.mdi ? ' mdi' : '') + (icon === $('icon').value ? ' selected' : '');
+  tile.title = icon.replace(/^mdi:/, '');
+  tile.textContent = g.text;
+  tile.onclick = () => setIcon(icon);
+  return tile;
+}
+
+function searchResults() {
+  const raw = $('icon-search').value.trim();
+  if (!raw) return [...homeIcons.map(name => 'mdi:' + name), ...EMOJI];
+  // Anything that is not plain ASCII is treated as an emoji to use as-is.
+  if (/[^\x00-\x7f]/.test(raw)) return [raw];
+  const query = raw.toLowerCase().replace(/^mdi:/, '');
+  const terms = query.split(/[\s-]+/).filter(Boolean);
+  return Object.keys(mdi)
+    .filter(name => terms.every(term => name.includes(term)))
+    .sort((a, b) => (b === query) - (a === query) || (b.startsWith(query)) - (a.startsWith(query)) || a.length - b.length)
+    .slice(0, 120)
+    .map(name => 'mdi:' + name);
+}
+
+function renderIconGrid() {
+  const grid = $('icon-grid');
+  const icons = searchResults();
+  grid.replaceChildren(...icons.map(iconTile));
+  if (!icons.length) grid.innerHTML = '<span class="empty">No icons match.</span>';
+}
+
+function setIcon(icon) {
+  $('icon').value = icon;
+  const current = $('icon-current');
+  const g = icon ? glyph(icon) : null;
+  current.textContent = g ? g.text : '';
+  current.className = 'icon-current' + (g ? ' set' : '') + (g && g.mdi ? ' mdi' : '');
+  current.title = icon ? icon.replace(/^mdi:/, '') : 'No icon';
+  renderIconGrid();
+  refresh();
+}
+
+$('icon-search').addEventListener('input', renderIconGrid);
+$('icon-search').addEventListener('keydown', event => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  const first = searchResults()[0];
+  if (first) setIcon(first);
+});
+
+async function loadIcons() {
+  const r = await fetch(apiBase + 'api/icons');
+  if (r.ok) ({all: mdi, home: homeIcons} = await r.json());
+  try {
+    const face = new FontFace('mdi', `url(${apiBase}mdi-font)`);
+    document.fonts.add(await face.load());
+  } catch (e) { /* tiles fall back to the icon names in their tooltips */ }
+  setIcon($('icon').value);
+}
+
+// Sliders and date
+
+const mm = value => Number(value).toLocaleString(undefined, {maximumFractionDigits: 1}) + ' mm';
+function showSizes() {
+  const pt = Number($('text_size').value);
+  $('text_size_out').textContent = pt ? pt + ' pt' : 'Auto';
+  $('icon_size_out').textContent = $('icon_size').value + '%';
+  for (const id of ['icon_margin', 'text_margin', 'gap']) $(id + '_out').textContent = mm($(id).value);
+}
+['text_size', 'icon_size', 'icon_margin', 'text_margin', 'gap'].forEach(id => $(id).addEventListener('input', showSizes));
+
+function toggleDate() {
+  $('date_fixed_label').hidden = $('date_mode').value !== 'fixed';
+  if ($('date_mode').value === 'fixed' && !$('date_fixed').value) $('date_fixed').value = new Date().toLocaleDateString('sv-SE');
+}
+
+function setDate(date) {
+  const fixed = /^\d{4}-\d{2}-\d{2}$/.test(date || '');
+  $('date_mode').value = date === true || date === 'today' ? 'today' : fixed ? 'fixed' : '';
+  if (fixed) $('date_fixed').value = date;
+  toggleDate();
+}
+
+// Printing
+
+async function printLabel() {
+  const btn = $('print-btn');
+  const label = btn.lastElementChild;
+  btn.disabled = true; label.textContent = 'Printing…';
+  try {
+    const r = await post('api/print', value());
+    const result = await r.json().catch(() => ({}));
+    toast(result.message || (r.ok ? 'Sent to printer' : 'Print failed'), !r.ok);
+  } catch (e) {
+    toast('Print failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false; label.textContent = 'Print';
+  }
+}
+
+// Templates
+
+function saveTemplate() {
+  $('template-name').value = '';
+  $('template-dialog').showModal();
+}
+
+async function confirmSaveTemplate(event) {
+  event.preventDefault();
+  const name = $('template-name').value.trim();
+  if (!name) return;
+  const r = await post('api/templates', {name, ...value()});
+  toast(r.ok ? 'Template saved' : 'Could not save template', !r.ok);
+  if (!r.ok) return;
+  $('template-dialog').close();
+  renderTemplates(await r.json());
+}
+
+async function deleteTemplate(name) {
+  if (!await confirmDialog('Delete template?', `"${name}" and its print button in Home Assistant will be removed.`, 'Delete')) return;
+  const r = await fetch(apiBase + 'api/templates/' + encodeURIComponent(name), {method: 'DELETE'});
+  if (r.ok) renderTemplates(await r.json());
+}
+
+function loadTemplate(t) {
+  fields.forEach(id => {
+    if (id === 'label_size') return;
+    const v = t[id] ?? FIELD_DEFAULTS[id];
+    if (v !== undefined) $(id).value = v;
+  });
+  setLabelSize(t.label_size);
+  showSizes();
+  setDate(t.date);
+  // Older templates kept emoji in a separate field and had no image choice.
+  const icon = t.icon || t.emoji || '';
+  setGraphic(t.graphic ?? (icon ? 'icon' : t.qr ? 'qr' : ''));
+  setIcon(icon);
+}
+
+function renderTemplates(list) {
+  const box = $('templates');
+  box.replaceChildren();
+  if (!list.length) {
+    box.innerHTML = '<span class="empty">Save a label as a template to reuse it here.</span>';
+    return;
+  }
+  for (const t of list) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    const load = document.createElement('button');
+    load.type = 'button'; load.textContent = t.name; load.onclick = () => loadTemplate(t);
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'remove'; del.textContent = String.fromCodePoint(0xF0156);
+    del.title = 'Delete'; del.onclick = () => deleteTemplate(t.name);
+    chip.append(load, del);
+    box.append(chip);
+  }
+}
+
+// Printer settings
+
+function toggleBackend() {
+  const backend = $('backend').value;
+  document.querySelectorAll('[data-backend]').forEach(el => el.hidden = el.dataset.backend !== backend);
+  // When printing through CUPS the add-on is a CUPS client, so it cannot share the printer itself.
+  const viaCups = backend === 'cups';
+  $('print_server').disabled = viaCups;
+  if (viaCups) $('print_server').checked = false;
+  $('print_server_label').classList.toggle('disabled', viaCups);
+  showPrintServer();
+}
+
+let favoriteDraft = [], offsetDraft = {}, favoritesFirst = [];
+function offsetInput(id, axis, title) {
+  const input = document.createElement('input');
+  input.type = 'number'; input.step = '0.5'; input.min = '-10'; input.max = '10'; input.title = title;
+  input.value = offsetDraft[id]?.[axis] ?? 0;
+  input.oninput = () => { offsetDraft[id] = {...offsetDraft[id], [axis]: Number(input.value) || 0}; };
+  const label = document.createElement('label');
+  label.append(title, input, 'mm');
+  return label;
+}
+
+function renderLabelList() {
+  const terms = $('label-search').value.toLowerCase().split(/\s+/).filter(Boolean);
+  // Favourites (as they were when the dialog opened) come first, so their corrections are easy to reach.
+  const order = size => favoritesFirst.includes(size.id) ? 0 : 1;
+  const items = [...LABEL_SIZES]
+    .sort((a, b) => order(a) - order(b))
+    .filter(size => terms.every(term => size.name.toLowerCase().includes(term)))
+    .map(size => {
+      const item = document.createElement('div');
+      item.className = 'label-item';
+      const row = document.createElement('label');
+      row.className = 'label-row';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = favoriteDraft.includes(size.id);
+      const [, name, dims] = size.name.match(/^(.*) \((.*)\)$/) || [, size.name, ''];
+      const text = document.createElement('span');
+      text.textContent = name;
+      const dimensions = document.createElement('span');
+      dimensions.className = 'size';
+      dimensions.textContent = dims;
+      row.append(box, text, dimensions);
+      const offsets = document.createElement('div');
+      offsets.className = 'offsets';
+      offsets.append('Print correction', offsetInput(size.id, 'x', 'Horizontal'), offsetInput(size.id, 'y', 'Vertical'));
+      offsets.hidden = !box.checked;
+      box.onchange = () => {
+        favoriteDraft = box.checked ? [...favoriteDraft, size.id] : favoriteDraft.filter(id => id !== size.id);
+        offsets.hidden = !box.checked;
+        renderDefaultLabel();
+      };
+      item.append(row, offsets);
+      return item;
+    });
+  $('label-list').replaceChildren(...items);
+  if (!items.length) $('label-list').innerHTML = '<p class="empty" style="padding:12px;margin:0">No labels match.</p>';
+}
+$('label-search').addEventListener('input', renderLabelList);
+
+function renderDefaultLabel() {
+  const select = $('default_label');
+  const current = select.value || settings.default_label;
+  const ids = LABEL_SIZES.map(size => size.id).filter(id => favoriteDraft.includes(id));
+  fillLabelSelect(select, ids, ids.includes(current) ? current : ids[0]);
+}
+
+async function openSettings() {
+  await loadSettings();
+  settingFields.forEach(id => { if (settings[id]) $(id).value = settings[id]; });
+  $('fallback_cups').checked = !!settings.fallback_cups;
+  favoriteDraft = [...settings.favorite_labels];
+  favoritesFirst = [...settings.favorite_labels];
+  offsetDraft = structuredClone(settings.label_offsets || {});
+  $('print_server').checked = !!settings.print_server;
+  $('label-search').value = '';
+  $('default_label').value = '';
+  renderLabelList();
+  renderDefaultLabel();
+  toggleBackend();
+  settingsDialog.showModal();
+}
+
+let printServerTimer;
+async function showPrintServer() {
+  clearTimeout(printServerTimer);
+  const info = $('print-server-info');
+  if ($('backend').value === 'cups') {
+    info.textContent = 'Not available while printing through CUPS.';
+    return;
+  }
+  const r = await fetch(apiBase + 'api/status');
+  const server = r.ok ? (await r.json()).print_server : null;
+  if (!server || !server.enabled) {
+    info.textContent = 'Computers and phones on your network can then find it and print to it like any other printer.';
+  } else if (server.starting) {
+    info.textContent = 'Starting…';
+    if (settingsDialog.open) printServerTimer = setTimeout(showPrintServer, 2000);
+  } else if (server.error) {
+    info.textContent = 'Could not start: ' + server.error + '. See the add-on log.';
+  } else {
+    info.textContent = `Shared as "${server.name}"${server.model ? ' (' + server.model + ')' : ''}. `
+      + `Computers and phones find it automatically; to add it by hand use ${server.uri}`;
+  }
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  if (!favoriteDraft.length) return toast('Choose at least one label size', true);
+  const current = $('label_size').value;
+  const values = Object.fromEntries(settingFields.map(id => [id, $(id).value]));
+  values.fallback_cups = $('fallback_cups').checked;
+  values.favorite_labels = LABEL_SIZES.map(size => size.id).filter(id => favoriteDraft.includes(id));
+  values.default_label = $('default_label').value;
+  values.print_server = $('print_server').checked;
+  values.label_offsets = Object.fromEntries(Object.entries(offsetDraft).filter(([id]) => favoriteDraft.includes(id)));
+  const r = await post('api/settings', values);
+  const result = await r.json().catch(() => ({}));
+  toast(result.message || (r.ok ? 'Printer settings saved' : 'Could not save settings'), !r.ok);
+  if (!r.ok) return;
+  settingsDialog.close();
+  await loadSettings();
+  setLabelSize(current);
+  queueRefresh();
+}
+
+(async () => {
+  const r = await fetch(apiBase + 'api/templates');
+  renderTemplates(r.ok ? await r.json() : []);
+})();
+setGraphic('');
+loadSettings().then(loadIcons);
+toggleDate();
+showSizes();
+(async () => {
+  const r = await fetch(apiBase + 'api/status');
+  if (!r.ok) return;
+  const status = await r.json();
+  $('ha-hint').textContent = !status.mqtt
+    ? 'Set up MQTT in the add-on configuration to get a Home Assistant button for every template.'
+    : status.mqtt_connected
+      ? 'Every template is also a button in Home Assistant, under the "Label Studio" device.'
+      : 'Not connected to the MQTT broker yet; check the add-on log.';
+})();
+</script>
+</body>
+</html>
