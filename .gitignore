@@ -8,3 +8,6 @@ env/
 # macOS
 .DS_Store
 ._*
+
+# Brand source files, kept locally
+brand/

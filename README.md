@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="brand/logo-dark.svg">
-    <img src="brand/logo.svg" alt="HA Label Studio" width="320">
+    <source media="(prefers-color-scheme: dark)" srcset="images/logo-dark.svg">
+    <img src="images/logo.svg" alt="HA Label Studio" width="320">
   </picture>
 </p>
 
