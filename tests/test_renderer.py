@@ -43,11 +43,11 @@ def test_text_never_reaches_the_margin(lines, label_size):
     assert _ink_outside_margin(image) == 0
 
 
-def test_whole_words_are_kept_together_when_they_fit():
-    font = label_renderer._text_font(label_renderer.DEFAULT_FONT, True, 40)
-    lines = label_renderer._layout_text([("Batteries", 1.0)], 300, 300, label_renderer.TextStyle())
+@pytest.mark.parametrize("family", sorted(label_renderer.FONT_FAMILIES))
+def test_whole_words_are_kept_together_when_they_fit(family):
+    # Wide enough for the word at a comfortable size in any font, so it must not be hyphenated.
+    lines = label_renderer._layout_text([("Batteries", 1.0)], 800, 300, label_renderer.TextStyle(family=family))
     assert [line.text for line in lines] == ["Batteries"]
-    assert font.getlength("Batteries") <= 300
 
 
 def test_overflowing_text_is_cut_with_an_ellipsis():
