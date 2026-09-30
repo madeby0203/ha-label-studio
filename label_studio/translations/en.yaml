@@ -13,7 +13,7 @@ configuration:
     description: Try CUPS when printing over direct USB fails.
   mqtt_host:
     name: MQTT broker
-    description: Host name or IP address of your MQTT broker, e.g. 192.168.1.63. Leave empty to use the Mosquitto add-on automatically. Needed for the Home Assistant print buttons.
+    description: Host name or IP address of your MQTT broker, e.g. 192.168.1.10. Leave empty to use the Mosquitto broker app automatically. Needed for the print buttons in Home Assistant.
   mqtt_port:
     name: MQTT port
     description: Usually 1883.
