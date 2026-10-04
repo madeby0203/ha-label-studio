@@ -13,7 +13,7 @@ SUPERVISOR_URL = "http://supervisor"
 # s6-overlay keeps the container environment here when a process does not inherit it.
 S6_ENVIRONMENT = Path("/run/s6/container_environment")
 # Label fields that may contain Home Assistant templates such as {{ states('sensor.x') }}.
-TEMPLATE_FIELDS = ("text", "qr")
+TEMPLATE_FIELDS = ("text", "qr", "title", "subtitle")
 
 
 def supervisor_token() -> str | None:

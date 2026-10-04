@@ -103,6 +103,36 @@ A payload with `template` prints that template; any other fields override the te
 | `icon_margin`, `text_margin`, `gap` | Spacing in mm. |
 | `copies` | Number of labels. |
 
+### The tagged layout
+
+For labels made by other apps, such as inventory labels, `"layout": "tagged"` prints a fixed design: a tag in the top left, a large title, a line under it, a code in a box in the bottom left and a QR code in the bottom right. It can be printed white on black.
+
+```json
+{
+  "layout": "tagged",
+  "tag": "ITEM",
+  "tag_style": "outline",
+  "title": "Cordless drill",
+  "subtitle": "Basement › Shelf B",
+  "code": "I-0142",
+  "qr": "I-0142",
+  "invert": false,
+  "label_size": "11354"
+}
+```
+
+| Field | Values |
+|---|---|
+| `tag` | A short word in capitals, such as `LOCATION` or `ITEM`. Optional. |
+| `tag_style` | `filled` (a solid pill) or `outline`. |
+| `title` | The main text, made as large as fits on two lines at most. A title like `Box 2 · Camping gear` breaks after the dot. |
+| `subtitle` | One smaller line under the title, shortened with … when too long. |
+| `code` | A short code, printed in a box. |
+| `qr` | The QR code's content. |
+| `invert` | `true` prints white on black; the QR code keeps a white background so it still scans. |
+
+The title, tag and subtitle use Figtree (included, SIL Open Font License); the code uses DejaVu Sans Mono. Other fields of the standard layout are ignored.
+
 ## Network printer
 
 Label Studio can share the LabelWriter on your network, so computers and phones can print to it like any other printer. Turn on **Share this printer on the network** under **Printer settings**. It is off by default, and not available while the connection is set to CUPS.

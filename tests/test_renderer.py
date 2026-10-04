@@ -143,3 +143,41 @@ def test_a_label_shows_an_icon_or_a_qr_code_never_both():
     assert qr.tobytes() == qr_only.tobytes()
     none = label_renderer.render_request({"text": "x", "icon": "mdi:fridge", "qr": "y", "graphic": ""})
     assert none.tobytes() == label_renderer.render_request({"text": "x"}).tobytes()
+
+
+def _tagged(**overrides):
+    request = {"layout": "tagged", "tag": "ITEM", "tag_style": "outline", "title": "Cordless drill",
+               "subtitle": "Basement › Shelf B", "code": "I-0142", "qr": "I-0142", **overrides}
+    return label_renderer.render_request(request)
+
+
+def test_tagged_layout_is_label_sized_and_monochrome():
+    image = _tagged()
+    assert image.mode == "1" and image.size == (675, 375)
+    assert len(image.getcolors()) == 2
+
+
+def test_tagged_layout_inverts():
+    standard, inverted = _tagged(), _tagged(invert=True)
+    black = lambda image: image.histogram()[0] / (image.width * image.height)
+    assert black(standard) < 0.3 and black(inverted) > 0.6
+
+
+def test_tagged_qr_code_stays_black_on_white_when_inverted():
+    image = _tagged(invert=True)
+    # The QR code sits bottom right on a white tile.
+    corner = image.crop((image.width - 40, image.height - 40, image.width - 28, image.height - 28))
+    assert corner.histogram()[0] < corner.width * corner.height
+
+
+@pytest.mark.parametrize("title", ["Attic", "Box 2 · Camping gear", "Vacuum cleaner bags for the upstairs Miele " * 4, "Supercalifragilisticexpialidocious" * 3])
+@pytest.mark.parametrize("invert", [False, True])
+def test_tagged_layout_takes_any_title(title, invert):
+    image = _tagged(title=title, invert=invert, subtitle="Attic › Storage cupboard › Top shelf › Box 4 · Spare parts")
+    assert image.size == (675, 375)
+
+
+def test_tagged_layout_fits_other_label_sizes():
+    for label_id in ("99010", "11354", "30252"):
+        image = _tagged(label_size=label_id)
+        assert image.size == label_renderer.LABEL_SIZES[label_id].pixels

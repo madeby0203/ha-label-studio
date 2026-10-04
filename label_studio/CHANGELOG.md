@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+
+- The tagged layout (`"layout": "tagged"`): a tag, a large title, a line under it, a boxed code and a QR code, black on white or inverted. Used for inventory labels from Homebase.
+- Figtree is included as the font for the tagged layout.
+
 ## 1.0.0
 
 First public release.

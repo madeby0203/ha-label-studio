@@ -24,6 +24,7 @@ COPY label_renderer.py printer.py app.py ha.py mqtt_bridge.py print_server.py re
 COPY cups-backend-dymo /usr/lib/cups/backend/dymo
 RUN chmod 0700 /usr/lib/cups/backend/dymo
 COPY templates ./templates
+COPY fonts ./fonts
 COPY run.sh ./
 RUN chmod +x run.sh render_png.py
 

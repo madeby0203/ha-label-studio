@@ -575,6 +575,136 @@ def format_date(value, date_format: str | None = None) -> str | None:
     return day.strftime(date_format if date_format in DATE_FORMATS else DEFAULT_DATE_FORMAT)
 
 
+# The tagged layout: a tag such as LOCATION or ITEM, a large title, a line saying where, a boxed
+# code bottom left and a QR code bottom right. Measured in dots at 300 dpi on a 57 x 32 mm label
+# and scaled for other sizes.
+TAG_STYLES = ("filled", "outline")
+# Figtree (SIL Open Font License, bundled in fonts/), as in Homebase; Roboto if it's missing.
+TITLE_FONTS = ("Figtree-Black.ttf", "Roboto-Black.ttf", "Roboto-Bold.ttf", "DejaVuSans-Bold.ttf")
+_TAGGED_BASE = (675, 375)
+
+
+def _font_file(*names: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    for name in names:
+        path = find_font_file(name)
+        if path:
+            return ImageFont.truetype(str(path), size)
+    return ImageFont.load_default(size)
+
+
+def _spaced_width(text: str, font: ImageFont.ImageFont, spacing: int) -> int:
+    return round(sum(font.getlength(c) for c in text) + spacing * max(0, len(text) - 1))
+
+
+def _draw_spaced(draw: ImageDraw.ImageDraw, xy: tuple[int, int], text: str, font, spacing: int, fill: int) -> None:
+    x, y = xy
+    for char in text:
+        draw.text((x, y), char, font=font, fill=fill, anchor="lm")
+        x += font.getlength(char) + spacing
+
+
+def render_tagged(
+    *,
+    title: str,
+    subtitle: str = "",
+    code: str = "",
+    qr_text: str = "",
+    tag: str = "",
+    tag_style: str = "filled",
+    invert: bool = False,
+    label_size: str = DEFAULT_LABEL_SIZE,
+) -> Image.Image:
+    """The tagged layout, black on white, or white on black when inverted."""
+    size = LABEL_SIZES.get(label_size)
+    if size is None:
+        raise ValueError(f"Unknown label size: {label_size}")
+    width, height = size.pixels
+    scale = min(width / _TAGGED_BASE[0], height / _TAGGED_BASE[1])
+
+    def px(value: float) -> int:
+        return max(1, round(value * scale))
+
+    ink, paper = (255, 0) if invert else (0, 255)  # mode "1": 0 is black, 255 white
+    image = Image.new("1", (width, height), paper)
+    draw = ImageDraw.Draw(image)
+    margin_x, margin_y = px(28), px(24)
+    gap = px(10)
+
+    # Bottom right: the QR code, on a white tile when inverted so it still scans.
+    qr_side = px(168) if qr_text else 0
+    qr_left = width - margin_x - qr_side
+    qr_top = height - margin_y - qr_side
+    if qr_text:
+        if invert:
+            pad = px(12)
+            draw.rounded_rectangle((qr_left - pad, qr_top - pad, width - margin_x + pad, height - margin_y + pad), radius=px(10), fill=255)
+        image.paste(_qr_tile(qr_text, qr_side), (qr_left, qr_top))
+
+    # Bottom left: the code in a rounded box.
+    code_top = height - margin_y
+    if code:
+        code_font = _font_file("DejaVuSansMono-Bold.ttf", "DejaVuSansMono.ttf", size=px(30))
+        box_h = px(48)
+        code_top = height - margin_y - box_h
+        room = (qr_left - gap * 2 if qr_text else width - margin_x) - margin_x
+        text = code if code_font.getlength(code) <= room - px(36) else _ellipsize(code, code_font, room - px(36))
+        box_w = round(code_font.getlength(text)) + px(36)
+        draw.rounded_rectangle((margin_x, code_top, margin_x + box_w, code_top + box_h), radius=px(10), outline=ink, width=px(4))
+        draw.text((margin_x + box_w / 2, code_top + box_h / 2), text, font=code_font, fill=ink, anchor="mm")
+
+    # Top left: the tag, filled or outlined.
+    y = margin_y
+    if tag:
+        tag_font = _font_file("Figtree-Bold.ttf", "Roboto-Bold.ttf", "DejaVuSans-Bold.ttf", size=px(22))
+        spacing = px(2)
+        tag_text = tag.upper()
+        tag_h, pad_x = px(34), px(19)
+        tag_w = _spaced_width(tag_text, tag_font, spacing) + 2 * pad_x
+        box = (margin_x, y, margin_x + tag_w, y + tag_h)
+        if tag_style == "outline":
+            draw.rounded_rectangle(box, radius=tag_h // 2, outline=ink, width=px(3))
+            fill = ink
+        else:
+            draw.rounded_rectangle(box, radius=tag_h // 2, fill=ink)
+            fill = paper
+        _draw_spaced(draw, (margin_x + pad_x, y + tag_h // 2), tag_text, tag_font, spacing, fill)
+        y += tag_h + px(6)
+
+    sub_font = _font_file("Figtree-SemiBold.ttf", "Roboto-Medium.ttf", "DejaVuSans.ttf", size=px(24))
+    sub_h = _line_height(sub_font) if subtitle else 0
+    title_width = width - 2 * margin_x
+    # The title as large as fits above the QR code, lines set tight as in a headline;
+    # "Box 2 · Camping gear" breaks after the dot rather than anywhere.
+    # Clear of the QR code, and of the white tile around it when inverted.
+    title_room = (qr_top - (px(12) if invert else 0) - px(6) if qr_text else code_top) - y
+    head, dot, tail = title.partition(" · ")
+    pitch = 0.92
+    lines: list[str] = []
+    font = _font_file(*TITLE_FONTS, size=MIN_TEXT_SIZE)
+    for size in range(px(76), MIN_TEXT_SIZE - 1, -2):
+        font = _font_file(*TITLE_FONTS, size=size)
+        lines = _wrap(title, font, title_width, False, DEFAULT_LANGUAGE)
+        if len(lines) > 1 and dot and tail:
+            parts = [f"{head} ·", tail]
+            if all(font.getlength(part) <= title_width for part in parts):
+                lines = parts
+        height_used = round(len(lines) * size * pitch)
+        fits = all(font.getlength(line) <= title_width for line in lines)
+        if fits and height_used <= title_room and y + height_used + px(14) + sub_h <= code_top - px(6):
+            break
+    else:
+        lines = _wrap(title, font, title_width, True, DEFAULT_LANGUAGE)[:2]
+    for text in lines:
+        y += round(font.size * pitch)
+        draw.text((margin_x, y), text, font=font, fill=ink, anchor="ls")
+    if subtitle:
+        sub_top = y + px(14)
+        room = (qr_left - gap if qr_text and sub_top + sub_h > qr_top - px(12) else width - margin_x) - margin_x
+        text = subtitle if sub_font.getlength(subtitle) <= room else _ellipsize(subtitle, sub_font, room)
+        draw.text((margin_x, sub_top), text, font=sub_font, fill=ink, anchor="la")
+    return image
+
+
 def _number(value, default: float) -> float:
     try:
         return float(value)
@@ -583,6 +713,17 @@ def _number(value, default: float) -> float:
 
 
 def render_request(request: dict) -> Image.Image:
+    if request.get("layout") == "tagged":
+        return render_tagged(
+            title=str(request.get("title") or request.get("text") or ""),
+            subtitle=str(request.get("subtitle") or ""),
+            code=str(request.get("code") or ""),
+            qr_text=str(request.get("qr") or ""),
+            tag=str(request.get("tag") or ""),
+            tag_style=request.get("tag_style") if request.get("tag_style") in TAG_STYLES else "filled",
+            invert=str(request.get("invert", "")).lower() in ("1", "true", "yes", "on"),
+            label_size=request.get("label_size") or DEFAULT_LABEL_SIZE,
+        )
     date_text = format_date(request.get("date"), request.get("date_format"))
     # "graphic" says which image the label shows; without it an icon wins over a QR code.
     graphic = request.get("graphic")
