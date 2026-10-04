@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/apps/configuration#app-configuration
 name: Label Studio
-version: "1.1.0"
+version: "1.1.1"
 slug: label_studio
 description: Design and print labels on a USB DYMO LabelWriter, from Home Assistant
 url: https://github.com/madeby0203/ha-label-studio/tree/main/label_studio

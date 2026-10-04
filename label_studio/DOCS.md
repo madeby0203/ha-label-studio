@@ -131,7 +131,7 @@ For labels made by other apps, such as inventory labels, `"layout": "tagged"` pr
 | `qr` | The QR code's content. |
 | `invert` | `true` prints white on black; the QR code keeps a white background so it still scans. |
 
-The title, tag and subtitle use Figtree (included, SIL Open Font License); the code uses DejaVu Sans Mono. Other fields of the standard layout are ignored.
+The title uses Bricolage Grotesque, the tag and subtitle Figtree (both included, SIL Open Font License); the code uses DejaVu Sans Mono. Other fields of the standard layout are ignored.
 
 ## Network printer
 

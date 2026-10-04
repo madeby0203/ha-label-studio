@@ -579,8 +579,9 @@ def format_date(value, date_format: str | None = None) -> str | None:
 # code bottom left and a QR code bottom right. Measured in dots at 300 dpi on a 57 x 32 mm label
 # and scaled for other sizes.
 TAG_STYLES = ("filled", "outline")
-# Figtree (SIL Open Font License, bundled in fonts/), as in Homebase; Roboto if it's missing.
-TITLE_FONTS = ("Figtree-Black.ttf", "Roboto-Black.ttf", "Roboto-Bold.ttf", "DejaVuSans-Bold.ttf")
+# As in Homebase: the title in Bricolage Grotesque Bold, the rest in Figtree (both SIL Open Font
+# License, bundled in fonts/); Roboto if they're missing.
+TITLE_FONTS = ("BricolageGrotesque-Bold.ttf", "Roboto-Black.ttf", "Roboto-Bold.ttf", "DejaVuSans-Bold.ttf")
 _TAGGED_BASE = (675, 375)
 
 
@@ -674,17 +675,17 @@ def render_tagged(
     sub_h = _line_height(sub_font) if subtitle else 0
     title_width = width - 2 * margin_x
     # The title as large as fits above the QR code, lines set tight as in a headline;
-    # "Box 2 · Camping gear" breaks after the dot rather than anywhere.
+    # "Box 2 · Camping gear" always breaks after the dot: the name, then what's in it.
     # Clear of the QR code, and of the white tile around it when inverted.
     title_room = (qr_top - (px(12) if invert else 0) - px(6) if qr_text else code_top) - y
     head, dot, tail = title.partition(" · ")
     pitch = 0.92
     lines: list[str] = []
     font = _font_file(*TITLE_FONTS, size=MIN_TEXT_SIZE)
-    for size in range(px(76), MIN_TEXT_SIZE - 1, -2):
+    for size in range(px(72), MIN_TEXT_SIZE - 1, -2):
         font = _font_file(*TITLE_FONTS, size=size)
         lines = _wrap(title, font, title_width, False, DEFAULT_LANGUAGE)
-        if len(lines) > 1 and dot and tail:
+        if dot and tail:
             parts = [f"{head} ·", tail]
             if all(font.getlength(part) <= title_width for part in parts):
                 lines = parts
